@@ -3,6 +3,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 export default function Home() {
+  const [socket, setSocket] = useState<WebSocket | null>(null);
+
   const [isRecording, setIsRecording] = useState(false);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
@@ -14,7 +16,7 @@ export default function Home() {
     'Waiting for user input...'
   ]);
   const [messages, setMessages] = useState<Array<{ text: string, sender: 'user' | 'system' }>>([
-    { text: 'Welcome to the VLA Pipeline Interface', sender: 'system' }
+    { text: 'Welcome', sender: 'system' }
   ]);
   const [currentMessage, setCurrentMessage] = useState('');
 
@@ -484,7 +486,7 @@ export default function Home() {
           <div className="space-y-4">
             {/* Video/Camera Interface */}
             <div className="bg-white rounded-lg shadow-lg p-4 h-2/3">
-              <h2 className="text-xl font-semibold mb-4">Camera & Recording</h2>
+              <h2 className="text-xl font-semibold mb-4 text-black">Camera & Recording</h2>
 
               <div className="relative bg-black rounded-lg mb-4 h-64">
                 <video
@@ -574,7 +576,7 @@ export default function Home() {
             </div>
             
             {/* Teleprompter/Log View */}
-            <div className="bg-white rounded-lg shadow-lg p-4 h-1/3">
+            <div className="bg-white rounded-lg shadow-lg p-4 h-48">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-semibold text-gray-800">
                   {isTeleprompterActive ? 'Teleprompter' : 'System Logs'}
@@ -590,7 +592,7 @@ export default function Home() {
                     max="200"
                     disabled={isTeleprompterActive}
                   />
-                  <span className="text-sm">WPM</span>
+                  <span className="text-sm text-black">WPM</span>
                   {isTeleprompterActive && (
                     <button
                       onClick={stopTeleprompter}
@@ -624,32 +626,12 @@ export default function Home() {
             </div>
             </div>
           {/* WPM Display */}
-          <div className="mt-2 p-2 bg-blue-50 rounded">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-semibold">Speech Analysis:</span>
-              <div className="flex items-center gap-4">
-                <div className="text-sm">
-                  <span className="text-gray-600">Spoken WPM:</span>
-                  <span className={`ml-1 font-bold ${spokenWPM > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-                    {spokenWPM || '--'}
-                  </span>
-                </div>
-                <div className="text-sm">
-                  <span className="text-gray-600">Teleprompter:</span>
-                  <span className="ml-1 font-bold text-green-600">{teleprompterSpeed} WPM</span>
-                </div>
-              </div>
-            </div>
-            {transcriptBuffer.length > 0 && (
-              <div className="mt-1 text-xs text-gray-500">
-                Last {Math.min(5, transcriptBuffer.length)} chunks analyzed
-              </div>
-            )}
-          </div> 
+          {/* WPM Display - Small and scrollable */}
+
             
           {/* Right Side - Chat Interface */}
           <div className="bg-white rounded-lg shadow-lg p-4 flex flex-col">
-            <h2 className="text-xl font-semibold mb-4">Command Interface</h2>
+            <h2 className="text-xl font-semibold mb-4 text-black">Command Interface</h2>
 
             {/* Chat Messages */}
             <div
