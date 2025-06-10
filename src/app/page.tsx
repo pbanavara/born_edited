@@ -1,5 +1,4 @@
 'use client';
-
 import React, { useState, useRef, useEffect } from 'react';
 
 export default function Home() {
@@ -36,6 +35,7 @@ export default function Home() {
   const [teleprompterText, setTeleprompterText] = useState('');
   const [isTeleprompterActive, setIsTeleprompterActive] = useState(false);
   const [teleprompterSpeed, setTeleprompterSpeed] = useState(60); // WPM
+  const [currentWordIndex, setCurrentWordIndex] = useState(0); // Track current word position
   const teleprompterIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
 
@@ -85,24 +85,37 @@ export default function Home() {
     }
 
     const words = text.split(' ');
-    let currentWordIndex = 0;
+    // Use preserved word index or start from beginning if new text
+    const startIndex = text === teleprompterText ? currentWordIndex : 0;
+    let wordIndex = startIndex;
+    
     setIsTeleprompterActive(true);
-    setLogs(prev => [...prev.slice(0, -1)]); // Clear logs for teleprompter
+    
+    // If resuming, show current progress; if new text, clear logs
+    if (text === teleprompterText && startIndex > 0) {
+      const displayText = words.slice(0, startIndex).join(' ');
+      setLogs([displayText]);
+    } else {
+      setLogs(prev => [...prev.slice(0, -1)]); // Clear logs for teleprompter
+      setCurrentWordIndex(0); // Reset index for new text
+      wordIndex = 0;
+    }
 
     // Calculate interval: 60000ms per minute / words per minute
     const intervalMs = 60000 / teleprompterSpeed;
 
     teleprompterIntervalRef.current = setInterval(() => {
-      if (currentWordIndex < words.length) {
-        const displayText = words.slice(0, currentWordIndex + 1).join(' ');
+      if (wordIndex < words.length) {
+        const displayText = words.slice(0, wordIndex + 1).join(' ');
         setLogs([displayText]);
+        setCurrentWordIndex(wordIndex + 1); // Update the preserved index
 
         // Auto-scroll to show current text
         if (logContainerRef.current) {
           logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
         }
 
-        currentWordIndex++;
+        wordIndex++;
       } else {
         // Finished
         stopTeleprompter();
@@ -116,7 +129,7 @@ export default function Home() {
       teleprompterIntervalRef.current = null;
     }
     setIsTeleprompterActive(false);
-    addLog('Teleprompter stopped');
+    addLog('Teleprompter paused');
   };
 
 
@@ -461,6 +474,12 @@ export default function Home() {
   const sendMessage = () => {
     if (currentMessage.trim()) {
       setMessages(prev => [...prev, { text: currentMessage, sender: 'user' }]);
+      
+      // If this is new text, reset the word index
+      if (currentMessage !== teleprompterText) {
+        setCurrentWordIndex(0);
+      }
+      
       setTeleprompterText(currentMessage);
       startTeleprompter(currentMessage);
       setCurrentMessage('');
@@ -475,20 +494,80 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
+    <div className="min-h-screen bg-gray-900 p-4">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">
+        <h1 className="text-3xl font-bold text-center mb-6 text-white">
           Born Edited
         </h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-120px)]">
-          {/* Left Side */}
-          <div className="space-y-4">
-            {/* Video/Camera Interface */}
-            <div className="bg-white rounded-lg shadow-lg p-4 h-2/3">
-              <h2 className="text-xl font-semibold mb-4 text-black">Camera & Recording</h2>
+        {/* Teleprompter Display - Centered below title */}
+        <div className="max-w-4xl mx-auto mb-6">
+          <div className="bg-black bg-opacity-75 rounded-lg p-4 border border-gray-600">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-semibold text-white drop-shadow-lg">
+                Teleprompter
+              </h3>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-white drop-shadow-lg">Speed:</label>
+                <input
+                  type="number"
+                  value={teleprompterSpeed}
+                  onChange={(e) => setTeleprompterSpeed(Number(e.target.value))}
+                  className="w-12 px-1 py-1 border border-gray-400 rounded text-xs text-white bg-black bg-opacity-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  min="30"
+                  max="200"
+                  disabled={isTeleprompterActive}
+                />
+                <span className="text-xs text-white drop-shadow-lg">WPM</span>
+                {isTeleprompterActive && (
+                  <button
+                    onClick={stopTeleprompter}
+                    className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors"
+                  >
+                    Pause
+                  </button>
+                )}
+                {!isTeleprompterActive && teleprompterText && currentWordIndex > 0 && (
+                  <button
+                    onClick={() => startTeleprompter(teleprompterText)}
+                    className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 transition-colors"
+                  >
+                    Resume
+                  </button>
+                )}
+              </div>
+            </div>
 
-              <div className="relative bg-black rounded-lg mb-4 h-64">
+            <div
+              ref={logContainerRef}
+              className={`h-16 overflow-y-auto p-3 rounded border border-gray-600 ${isTeleprompterActive
+                ? 'text-green-400 font-mono text-lg leading-relaxed drop-shadow-lg bg-black bg-opacity-50'
+                : 'font-mono text-sm text-white drop-shadow-lg bg-gray-900 bg-opacity-75'
+                }`}
+            >
+              {isTeleprompterActive ? (
+                <div className="whitespace-pre-wrap">
+                  {logs[0] || ''}
+                </div>
+              ) : (
+                logs.map((log, index) => (
+                  <div key={index} className="mb-1">
+                    {log}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-10px)]">
+          {/* Left Side */}
+          <div className="space-y-2 lg:col-span-2">
+            {/* Video/Camera Interface */}
+            <div className="bg-gray-800 rounded-lg shadow-lg p-4 h-2/3 border border-gray-700">
+              <h2 className="text-xl font-semibold mb-4 text-white">Camera & Recording</h2>
+
+              <div className="relative bg-black rounded-lg mb-2 h-[80%]">
                 <video
                   ref={videoRef}
                   autoPlay
@@ -500,143 +579,66 @@ export default function Home() {
                     <span>Camera not started</span>
                   </div>
                 )}
-
-                {/* Audio Level Indicator */}
-                {isListening && (
-                  <div className="absolute top-2 right-2 bg-black bg-opacity-50 rounded p-2">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                      <div className="text-white text-sm">Audio</div>
-                      <div className="w-20 h-2 bg-gray-600 rounded">
-                        <div
-                          className="h-full bg-green-500 rounded transition-all duration-100"
-                          style={{ width: `${audioLevel}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="flex flex-wrap gap-2 mb-4">
                 <button
                   onClick={startCamera}
                   disabled={!!mediaStream}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-600 disabled:text-gray-400 transition-colors flex items-center gap-2"
                 >
-                  Start Camera
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
                 </button>
                 <button
-                  onClick={stopCamera}
+                  onClick={isRecording ? stopRecording : startRecording}
                   disabled={!mediaStream}
-                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400"
+                  className={`px-6 py-2 rounded-full transition-colors flex items-center gap-2 ${
+                    isRecording 
+                      ? 'bg-red-600 hover:bg-red-700 text-white' 
+                      : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-600 disabled:text-gray-400'
+                  }`}
                 >
-                  Stop Camera
+                  {isRecording ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  )}
+                  {isRecording ? 'Stop' : 'Record'}
                 </button>
-                <button
-                  onClick={startRecording}
-                  disabled={!mediaStream || isRecording}
-                  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
-                >
-                  Start Recording
-                </button>
-                <button
-                  onClick={stopRecording}
-                  disabled={!isRecording}
-                  className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 disabled:bg-gray-400"
-                >
-                  Stop Recording
-                </button>
-                {recordedChunks.length > 0 && (
-                  <button
-                    onClick={downloadRecording}
-                    className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600"
-                  >
-                    Download
-                  </button>
-                )}
               </div>
 
               {/* Status Indicators */}
               <div className="space-y-2">
-                {isRecording && (
-                  <div className="flex items-center text-red-600">
-                    <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse mr-2"></div>
-                    Recording Video + Audio...
-                  </div>
-                )}
-
                 {isListening && !isRecording && (
-                  <div className="flex items-center text-green-600">
-                    <div className="w-3 h-3 bg-green-600 rounded-full animate-pulse mr-2"></div>
+                  <div className="flex items-center text-green-400">
+                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse mr-2"></div>
                     Listening... (Audio Level: {Math.round(audioLevel)}%)
                   </div>
                 )}
               </div>
             </div>
-            
-            {/* Teleprompter/Log View */}
-            <div className="bg-white rounded-lg shadow-lg p-4 h-48">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-semibold text-gray-800">
-                  {isTeleprompterActive ? 'Teleprompter' : 'System Logs'}
-                </h3>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-black">Speed:</label>
-                  <input
-                    type="number"
-                    value={teleprompterSpeed}
-                    onChange={(e) => setTeleprompterSpeed(Number(e.target.value))}
-                    className="w-16 px-2 py-1 border rounded text-sm text-black"
-                    min="30"
-                    max="200"
-                    disabled={isTeleprompterActive}
-                  />
-                  <span className="text-sm text-black">WPM</span>
-                  {isTeleprompterActive && (
-                    <button
-                      onClick={stopTeleprompter}
-                      className="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600"
-                    >
-                      Stop
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div
-                ref={logContainerRef}
-                className={`h-32 overflow-y-auto p-3 rounded border ${isTeleprompterActive
-                    ? 'bg-black text-green-400 font-mono text-lg leading-relaxed'
-                    : 'bg-gray-50 font-mono text-sm'
-                  }`}
-              >
-                {isTeleprompterActive ? (
-                  <div className="whitespace-pre-wrap">
-                    {logs[0] || ''}
-                  </div>
-                ) : (
-                  logs.map((log, index) => (
-                    <div key={index} className="mb-1 text-gray-700">
-                      {log}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-            </div>
+          </div>
           {/* WPM Display */}
           {/* WPM Display - Small and scrollable */}
 
-            
-          {/* Right Side - Chat Interface */}
-          <div className="bg-white rounded-lg shadow-lg p-4 flex flex-col">
-            <h2 className="text-xl font-semibold mb-4 text-black">Command Interface</h2>
 
-            {/* Chat Messages */}
+          {/* Right Side - Chat Interface */}
+          <div className="bg-gray-800 rounded-lg shadow-lg p-4 flex flex-col border border-gray-700 h-2/3 lg:col-span-1">
+            <h2 className="text-xl font-semibold mb-4 text-white">Script Interface</h2>
+
+            {/* Chat Messages - Fixed Height with Scroll */}
             <div
               ref={chatContainerRef}
-              className="flex-1 overflow-y-auto bg-gray-50 p-4 rounded border mb-4 space-y-3"
+              className="overflow-y-auto bg-gray-900 p-4 rounded border border-gray-600 mb-4 space-y-3"
+              style={{ height: '400px' }}
             >
               {messages.map((message, index) => (
                 <div
@@ -645,8 +647,8 @@ export default function Home() {
                 >
                   <div
                     className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${message.sender === 'user'
-                        ? 'bg-blue-500 text-black'
-                        : 'bg-gray-200 text-gray-800'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-200'
                       }`}
                   >
                     {message.text}
@@ -655,19 +657,25 @@ export default function Home() {
               ))}
             </div>
 
-            {/* Input Area */}
-            <div className="flex gap-2">
+            {/* Input Area - Fixed Height */}
+            <div className="flex gap-2" style={{ height: '150px' }}>
               <textarea
                 value={currentMessage}
                 onChange={(e) => setCurrentMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Enter your command here..."
-                className="flex-1 p-3 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                rows={3}
+                placeholder="Enter your script here..."
+                className="flex-1 p-3 border border-gray-600 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-white bg-gray-700 placeholder-gray-400"
+                style={{ 
+                  height: '150px',
+                  scrollBehavior: 'smooth',
+                  overflowY: 'auto'
+                }}
               />
+            </div>
+            <div className="flex gap-2">
               <button
                 onClick={sendMessage}
-                className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 self-end"
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 self-end transition-colors"
               >
                 Send
               </button>
@@ -676,6 +684,5 @@ export default function Home() {
         </div>
       </div>
     </div>
-  );
-};
-
+  )
+}
