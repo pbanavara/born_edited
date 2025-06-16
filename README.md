@@ -27,7 +27,7 @@ A professional teleprompter and video recording application with real-time speec
 - Real-time status indicators
 - Smooth animations and transitions
 
-## Quick Start
+## Quick Start now
 
 ### Prerequisites
 - Node.js 18+ 
