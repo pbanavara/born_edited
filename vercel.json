@@ -3,7 +3,10 @@
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/next"
+      "use": "@vercel/next",
+      "config": {
+        "buildCommand": "npm run build"
+      }
     }
   ],
   "routes": [
@@ -14,5 +17,10 @@
   ],
   "env": {
     "NEXT_PUBLIC_OPENAI_API_KEY": "@openai_api_key"
+  },
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_OPENAI_API_KEY": "@openai_api_key"
+    }
   }
 } 
