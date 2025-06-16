@@ -31,7 +31,7 @@ A professional teleprompter and video recording application with real-time speec
 
 ### Prerequisites
 - Node.js 18+ 
-- Modern browser with camera support
+- Modern browser with the best camera support
 - OpenAI API key (optional, for Whisper functionality)
 
 ### Installation
