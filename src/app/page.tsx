@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import HeroSection from '../components/HeroSection';
 import TeleprompterInterface from '../components/TeleprompterInterface';
 import CameraInterface from '../components/CameraInterface';
+import DeckViewer from '../components/DeckViewer';
+import { TranscriptResult } from '../lib/openai';
 
 // Local type for SpeechRecognitionEvent (for browser compatibility)
 type SpeechRecognitionEvent = {
@@ -44,6 +46,11 @@ export default function Home() {
   const [useWebSpeech] = useState(true); // Manual switch: true = Web Speech, false = OpenAI
   const [isWebSpeechActive, setIsWebSpeechActive] = useState(false);
   const [webSpeechRecognition, setWebSpeechRecognition] = useState<unknown>(null);
+
+  // Pitch deck and transcript state
+  const [transcriptResult, setTranscriptResult] = useState<TranscriptResult | null>(null);
+  const [currentTranscriptPosition, setCurrentTranscriptPosition] = useState(0);
+  const [isTeleprompterActive, setIsTeleprompterActive] = useState(false);
 
   useEffect(() => {
     // Auto-scroll logs to bottom
@@ -496,13 +503,80 @@ export default function Home() {
     document.getElementById('teleprompter-section')?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const handleTranscriptGenerated = (result: TranscriptResult) => {
+    setTranscriptResult(result);
+    setLogs([`Transcript generated with ${result.slideMarkers.length} slides`]);
+    addLog(`Ready to present: ${result.slideMarkers.length} slides loaded`);
+  };
+
+  const handleError = (error: string) => {
+    addLog(`Error: ${error}`);
+  };
+
+  const startTeleprompter = () => {
+    if (!transcriptResult) {
+      addLog('No transcript available. Please upload a pitch deck first.');
+      return;
+    }
+
+    setIsTeleprompterActive(true);
+    setCurrentTranscriptPosition(0);
+    addLog('Starting teleprompter presentation...');
+  };
+
+  const stopTeleprompter = () => {
+    setIsTeleprompterActive(false);
+    addLog('Teleprompter stopped');
+  };
+
+  const updateTeleprompterDisplay = () => {
+    if (!transcriptResult || !isTeleprompterActive) return;
+
+    // Calculate how much text to show based on current position
+    const displayText = transcriptResult.transcript.substring(0, currentTranscriptPosition);
+    setLogs([displayText]);
+
+    // Auto-scroll to show current text
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  };
+
+  // Auto-advance transcript based on teleprompter speed
+  useEffect(() => {
+    if (!isTeleprompterActive || !transcriptResult) return;
+
+    const intervalMs = 60000 / teleprompterSpeed; // Convert WPM to milliseconds per word
+    const wordsPerInterval = 1; // Advance by 1 word at a time
+    const charsPerWord = 5; // Average characters per word
+    const charsPerInterval = wordsPerInterval * charsPerWord;
+
+    const interval = setInterval(() => {
+      setCurrentTranscriptPosition(prev => {
+        const newPosition = prev + charsPerInterval;
+        if (newPosition >= transcriptResult.transcript.length) {
+          stopTeleprompter();
+          return transcriptResult.transcript.length;
+        }
+        return newPosition;
+      });
+    }, intervalMs);
+
+    return () => clearInterval(interval);
+  }, [isTeleprompterActive, teleprompterSpeed, transcriptResult]);
+
+  // Update teleprompter display when position changes
+  useEffect(() => {
+    updateTeleprompterDisplay();
+  }, [currentTranscriptPosition, isTeleprompterActive, transcriptResult]);
+
   return (
     <div className="min-h-screen bg-gray-900">
       {/* Hero Section - First Fold */}
       <HeroSection onStartRecording={handleStartRecording} />
 
       {/* Teleprompter Interface - Second Fold */}
-      <div id="teleprompter-section" className="min-h-screen bg-gray-900 p-4">
+      <div id="teleprompter-section" className="min-h-screen bg-gray-900">
         <TeleprompterInterface
           teleprompterSpeed={teleprompterSpeed}
           onSpeedChange={setTeleprompterSpeed}
@@ -510,24 +584,75 @@ export default function Home() {
           logContainerRef={logContainerRef}
         />
 
-        <CameraInterface
-          mediaStream={mediaStream}
-          isRecording={isRecording}
-          isPlayingRecording={isPlayingRecording}
-          recordingUrl={recordingUrl}
-          recordedChunks={recordedChunks}
-          isListening={isListening}
-          isWhisperActive={isWhisperActive}
-          isWebSpeechActive={isWebSpeechActive}
-          audioLevel={audioLevel}
-          videoRef={videoRef}
-          startCamera={startCamera}
-          stopCamera={stopCamera}
-          startRecording={startRecording}
-          stopRecording={stopRecording}
-          viewRecording={viewRecording}
-          stopPlayback={stopPlayback}
-        />
+        {/* Teleprompter Controls */}
+        <div className="bg-gray-900 p-4 text-center">
+          {transcriptResult ? (
+            <div className="space-x-4">
+              <button
+                onClick={startTeleprompter}
+                disabled={isTeleprompterActive}
+                className="bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-md transition-colors"
+              >
+                Start Presentation
+              </button>
+              <button
+                onClick={stopTeleprompter}
+                disabled={!isTeleprompterActive}
+                className="bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-md transition-colors"
+              >
+                Stop Presentation
+              </button>
+            </div>
+          ) : (
+            <p className="text-gray-400">Upload a pitch deck to start presenting</p>
+          )}
+        </div>
+      </div>
+
+      {/* Camera and Deck Viewer Section - Side by Side */}
+      <div className="bg-gray-900 p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Camera Interface */}
+          <div>
+            <CameraInterface
+              mediaStream={mediaStream}
+              isRecording={isRecording}
+              isPlayingRecording={isPlayingRecording}
+              recordingUrl={recordingUrl}
+              recordedChunks={recordedChunks}
+              isListening={isListening}
+              isWhisperActive={isWhisperActive}
+              isWebSpeechActive={isWebSpeechActive}
+              audioLevel={audioLevel}
+              videoRef={videoRef}
+              startCamera={startCamera}
+              stopCamera={stopCamera}
+              startRecording={startRecording}
+              stopRecording={stopRecording}
+              viewRecording={viewRecording}
+              stopPlayback={stopPlayback}
+              onTranscriptGenerated={handleTranscriptGenerated}
+              onError={handleError}
+            />
+          </div>
+
+          {/* Deck Viewer */}
+          <div>
+            {transcriptResult ? (
+              <DeckViewer
+                slideMarkers={transcriptResult.slideMarkers}
+                currentPosition={currentTranscriptPosition}
+              />
+            ) : (
+              <div className="bg-white rounded-lg shadow-lg p-6 h-full flex items-center justify-center">
+                <div className="text-center text-gray-500">
+                  <p className="text-lg font-medium mb-2">No Presentation Loaded</p>
+                  <p className="text-sm">Upload a pitch deck in the camera interface to view slides here</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

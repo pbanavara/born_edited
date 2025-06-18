@@ -1,5 +1,6 @@
 'use client';
-import React from 'react';
+import React, { useState, useRef } from 'react';
+import { TranscriptResult } from '../lib/openai';
 
 interface CameraInterfaceProps {
   mediaStream: MediaStream | null;
@@ -18,6 +19,8 @@ interface CameraInterfaceProps {
   stopRecording: () => void;
   viewRecording: () => void;
   stopPlayback: () => void;
+  onTranscriptGenerated?: (result: TranscriptResult) => void;
+  onError?: (error: string) => void;
 }
 
 export default function CameraInterface({
@@ -36,8 +39,86 @@ export default function CameraInterface({
   startRecording,
   stopRecording,
   viewRecording,
-  stopPlayback
+  stopPlayback,
+  onTranscriptGenerated,
+  onError
 }: CameraInterfaceProps) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    console.log('File upload started:', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      lastModified: file.lastModified
+    });
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file); // Send as binary blob
+
+      console.log('FormData created, sending to server...');
+
+      // Simulate progress updates
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 1000);
+
+      const response = await fetch('/api/process-deck', {
+        method: 'POST',
+        body: formData,
+      });
+
+      console.log('Server response received:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Server error response:', errorData);
+        
+        if (errorData.error?.code === 'insufficient_quota') {
+          throw new Error('OpenAI quota exceeded. Please check your billing and account status.');
+        }
+        throw new Error(errorData.error || 'Failed to process pitch deck');
+      }
+
+      const result: TranscriptResult = await response.json();
+      console.log('Successfully received transcript result:', result);
+      onTranscriptGenerated?.(result);
+
+    } catch (error) {
+      console.error('Error uploading pitch deck:', error);
+      onError?.(error instanceof Error ? error.message : 'Failed to process pitch deck');
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="space-y-4">
@@ -132,11 +213,22 @@ export default function CameraInterface({
 
             {/* Upload Pitch Deck Section */}
             <div className="flex items-center gap-3 bg-gray-700 rounded-lg px-3 py-2">
-              <button className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded transition-colors flex items-center gap-2 text-sm">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.ppt,.pptx"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <button 
+                onClick={handleUploadClick}
+                disabled={isUploading}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded transition-colors flex items-center gap-2 text-sm"
+              >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
-                Upload Deck
+                {isUploading ? 'Processing...' : 'Upload Deck'}
               </button>
               
               <div className="text-xs text-gray-300">
@@ -163,13 +255,13 @@ export default function CameraInterface({
                     strokeWidth="2"
                     fill="none"
                     strokeDasharray={`${2 * Math.PI * 14}`}
-                    strokeDashoffset={`${2 * Math.PI * 14 * (1 - 0 / 100)}`}
+                    strokeDashoffset={`${2 * Math.PI * 14 * (1 - uploadProgress / 100)}`}
                     strokeLinecap="round"
                     className="text-blue-500 transition-all duration-300"
                   />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-xs text-blue-400 font-medium">0%</span>
+                  <span className="text-xs text-blue-400 font-medium">{uploadProgress}%</span>
                 </div>
               </div>
             </div>

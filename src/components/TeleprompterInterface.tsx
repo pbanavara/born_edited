@@ -22,7 +22,7 @@ export default function TeleprompterInterface({
   }, [logs, logContainerRef]);
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 shadow-lg">
+    <div className="max-w-4xl mx-auto bg-gray-800 shadow-lg">
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-300 mb-2">
           Speed WPM
@@ -40,9 +40,7 @@ export default function TeleprompterInterface({
       <div className="space-y-4">
         <div
           ref={logContainerRef}
-          className={`h-32 overflow-y-auto p-6 rounded-lg border border-gray-600 ${
-            'text-green-400 font-mono text-xl leading-relaxed drop-shadow-lg bg-black bg-opacity-50'
-          }`}
+          className={`w-full h-32 overflow-y-auto p-6 border border-gray-600 text-green-400 font-mono text-xl leading-relaxed drop-shadow-lg bg-black bg-opacity-50`}
         >
           {logs.map((log, index) => (
             <div key={index} className="mb-1">
